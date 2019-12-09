@@ -1,3 +1,15 @@
+# IntelliJ IDEA
+.idea
+*.iml
+
+# Eclipse
+.settings
+.project
+.classpath
+
+# VS Code
+.vscode
+
 # Binaries for programs and plugins
 *.exe
 *.exe~
