@@ -21,8 +21,26 @@ func mongoPanic(err error) {
 	}
 }
 
-func UseSession(ctx context.Context, client *mongo.Client, fn func(sessionContext mongo.SessionContext) error) {
-	err := client.UseSession(ctx, fn)
+func UseSession(ctx context.Context, client *mongo.Client, fn func(context mongo.SessionContext) error) {
+	err := client.UseSession(ctx, func(sessionContext mongo.SessionContext) (err error) {
+		defer func() {
+			if err != nil {
+				sessionContext.AbortTransaction(sessionContext)
+				mongoPanic(err)
+			}
+			err := recover().(error)
+			mongoPanic(err)
+		}()
+		err = sessionContext.StartTransaction()
+		mongoPanic(err)
+		err = fn(sessionContext)
+		if err != nil {
+			return err
+		}
+		err = sessionContext.CommitTransaction(sessionContext)
+		mongoPanic(err)
+		return err
+	})
 	mongoPanic(err)
 }
 
@@ -49,9 +67,19 @@ func FindOne(ctx context.Context, c *mongo.Collection, filter interface{}, retur
 	mongoPanic(err)
 }
 
-func Find(ctx context.Context, c *mongo.Collection, filter interface{}, returnSingleResult interface{}, opts ...*options.FindOptions) {
-	/*err := c.Find(ctx, filter, opts...).Decode(returnSingleResult)
-	if err != nil {
-		Panic(MONGO_ERROR, err.Error())
-	}*/
+func Find(ctx context.Context, c *mongo.Collection, filter interface{}, cursorFunc func(cursor *mongo.Cursor), opts ...*options.FindOptions) {
+	cursor, err := c.Find(ctx, filter, opts...)
+	for {
+		if !cursor.Next(ctx) {
+			break
+		}
+		cursorFunc(cursor)
+	}
+	mongoPanic(err)
+	return
+}
+
+func Cursor(cursor *mongo.Cursor, result interface{}) {
+	err := cursor.Decode(result)
+	mongoPanic(err)
 }
