@@ -1,10 +1,10 @@
-// Mongodb 通用操作代码库
 package hmgdb
 
 import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -15,9 +15,9 @@ var (
 	MONGO_ERROR = errors.New("99100:mongo->%s")
 )
 
-func mongoPanic(err error) {
+func MongoPanic(err error) {
 	if err != nil {
-		panic(errors.New(fmt.Sprintf(MONGO_ERROR.Error(), err.Error())))
+		log.Panic(errors.New(fmt.Sprintf(MONGO_ERROR.Error(), err.Error())))
 	}
 }
 
@@ -26,33 +26,33 @@ func UseSession(ctx context.Context, client *mongo.Client, fn func(context mongo
 		defer func() {
 			if err != nil {
 				sessionContext.AbortTransaction(sessionContext)
-				mongoPanic(err)
+				MongoPanic(err)
 			}
 			err := recover().(error)
-			mongoPanic(err)
+			MongoPanic(err)
 		}()
 		err = sessionContext.StartTransaction()
-		mongoPanic(err)
+		MongoPanic(err)
 		err = fn(sessionContext)
 		if err != nil {
 			return err
 		}
 		err = sessionContext.CommitTransaction(sessionContext)
-		mongoPanic(err)
+		MongoPanic(err)
 		return err
 	})
-	mongoPanic(err)
+	MongoPanic(err)
 }
 
 func InsertOne(ctx context.Context, c *mongo.Collection, document interface{}, opts ...*options.InsertOneOptions) (objectId string) {
 	insertOneResult, err := c.InsertOne(ctx, document, opts...)
-	mongoPanic(err)
+	MongoPanic(err)
 	return insertOneResult.InsertedID.(primitive.ObjectID).Hex()
 }
 
 func UpdateOne(ctx context.Context, c *mongo.Collection, filter interface{}, update interface{}, opts ...*options.UpdateOptions) *mongo.UpdateResult {
 	updateResult, err := c.UpdateOne(ctx, filter, update, opts...)
-	mongoPanic(err)
+	MongoPanic(err)
 	return updateResult
 }
 
@@ -64,7 +64,7 @@ func Exists(ctx context.Context, c *mongo.Collection, filter interface{}, opts .
 
 func FindOne(ctx context.Context, c *mongo.Collection, filter interface{}, returnSingleResult interface{}, opts ...*options.FindOneOptions) {
 	err := c.FindOne(ctx, filter, opts...).Decode(returnSingleResult)
-	mongoPanic(err)
+	MongoPanic(err)
 }
 
 func Find(ctx context.Context, c *mongo.Collection, filter interface{}, cursorFunc func(cursor *mongo.Cursor), opts ...*options.FindOptions) {
@@ -75,11 +75,19 @@ func Find(ctx context.Context, c *mongo.Collection, filter interface{}, cursorFu
 		}
 		cursorFunc(cursor)
 	}
-	mongoPanic(err)
+	MongoPanic(err)
 	return
 }
 
 func Cursor(cursor *mongo.Cursor, result interface{}) {
 	err := cursor.Decode(result)
-	mongoPanic(err)
+	MongoPanic(err)
+}
+
+func FindOneAndUpdate(ctx context.Context, collection mongo.Collection, filter interface{}, update interface{}, singleResult interface{}) {
+	sr := collection.FindOneAndUpdate(ctx, filter, update)
+	err := sr.Decode(singleResult)
+	if err != nil {
+		MongoPanic(err)
+	}
 }

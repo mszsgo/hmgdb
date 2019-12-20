@@ -1,4 +1,4 @@
-// Mongodb 连接
+// Mongodb Connect
 package hmgdb
 
 import (
