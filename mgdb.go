@@ -35,7 +35,7 @@ func UpdateOne(ctx context.Context, c *mongo.Collection, filter interface{}, upd
 	return updateResult
 }
 
-func FindOneAndUpdate(ctx context.Context, collection mongo.Collection, filter interface{}, update interface{}, singleResult interface{}) {
+func FindOneAndUpdate(ctx context.Context, collection *mongo.Collection, filter interface{}, update interface{}, singleResult interface{}) {
 	sr := collection.FindOneAndUpdate(ctx, filter, update)
 	err := sr.Decode(singleResult)
 	if err != nil {
@@ -70,24 +70,18 @@ func UpdateOneOrInsertOne(ctx context.Context, collection *mongo.Collection, fil
 }
 
 // 使用事务
-func UseSession(ctx context.Context, client *mongo.Client, fn func(context mongo.SessionContext) error) {
+func UseSession(ctx context.Context, client *mongo.Client, fn func(context mongo.SessionContext)) {
 	err := client.UseSession(ctx, func(sessionContext mongo.SessionContext) (err error) {
 		defer func() {
-			if err != nil {
-				sessionContext.AbortTransaction(sessionContext)
-				MongoPanic(err)
-			}
 			err := recover().(error)
+			if err != nil {
+				MongoPanic(sessionContext.AbortTransaction(sessionContext))
+			}
 			MongoPanic(err)
 		}()
-		err = sessionContext.StartTransaction()
-		MongoPanic(err)
-		err = fn(sessionContext)
-		if err != nil {
-			return err
-		}
-		err = sessionContext.CommitTransaction(sessionContext)
-		MongoPanic(err)
+		MongoPanic(sessionContext.StartTransaction())
+		fn(sessionContext)
+		MongoPanic(sessionContext.CommitTransaction(sessionContext))
 		return err
 	})
 	MongoPanic(err)
