@@ -41,11 +41,11 @@ func SetDatabase(name string, v *mongo.Database) {
 }
 
 func SetConnectString(name string, connectionString string) {
-	SetDatabase(name, connect(connectionString))
+	SetDatabase(name, Connect(connectionString))
 }
 
 // 注意处理连接panic
-func connect(connectionString string) *mongo.Database {
+func Connect(connectionString string) *mongo.Database {
 	if connectionString == "" {
 		log.Panic("Mongodb 连接字符串不能为空")
 	}
