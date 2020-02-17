@@ -13,6 +13,11 @@ func NewF() Filter {
 
 type Filter bson.M
 
+func (f Filter) M(k string, v Filter) Filter {
+	f[k] = v
+	return f
+}
+
 func (f Filter) Str(k string, v string) Filter {
 	if v != "" {
 		f[k] = v
