@@ -5,9 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"time"
 
-	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -43,18 +41,6 @@ func FindOneAndUpdate(ctx context.Context, collection *mongo.Collection, filter 
 	}
 }
 
-// 检查集合是否存在，不存在自动创建，因不存在的集合无法使用事务
-func CollectionCreate(collection *mongo.Collection) {
-	ctx := context.TODO()
-	cursor, err := collection.Find(ctx, bson.M{}, options.Find().SetLimit(1))
-	if err != nil {
-		MongoPanic(err)
-	}
-	if !cursor.Next(ctx) {
-		InsertOne(nil, collection, bson.M{"createdAt": time.Now()})
-	}
-}
-
 func UpdateOneOrInsertOne(ctx context.Context, collection *mongo.Collection, filter interface{}, update interface{}, insert interface{}) {
 	ur, err := collection.UpdateOne(ctx, filter, update)
 	if err != nil {
@@ -70,27 +56,42 @@ func UpdateOneOrInsertOne(ctx context.Context, collection *mongo.Collection, fil
 }
 
 // 使用事务
-func UseSession(ctx context.Context, client *mongo.Client, fn func(context mongo.SessionContext)) {
-	err := client.UseSession(ctx, func(sessionContext mongo.SessionContext) (err error) {
-		defer func() {
-			err := recover().(error)
-			if err != nil {
-				MongoPanic(sessionContext.AbortTransaction(sessionContext))
+func UseSession(ctx context.Context, client *mongo.Client, fn func(context mongo.SessionContext) error) error {
+	return client.UseSession(ctx, func(sessionContext mongo.SessionContext) (err error) {
+		e := sessionContext.StartTransaction()
+		if e != nil {
+			MongoPanic(e)
+		}
+		err = fn(sessionContext)
+		if err == nil {
+			e = sessionContext.CommitTransaction(sessionContext)
+			if e != nil {
+				MongoPanic(e)
 			}
-			MongoPanic(err)
-		}()
-		MongoPanic(sessionContext.StartTransaction())
-		fn(sessionContext)
-		MongoPanic(sessionContext.CommitTransaction(sessionContext))
+			return
+		}
+		e = sessionContext.AbortTransaction(sessionContext)
+		if e != nil {
+			MongoPanic(e)
+		}
 		return err
 	})
-	MongoPanic(err)
 }
 
-func Exists(ctx context.Context, c *mongo.Collection, filter interface{}, opts ...*options.FindOneOptions) (b bool) {
-	var rsr map[string]interface{}
-	err := c.FindOne(ctx, filter, opts...).Decode(&rsr)
-	return err == nil
+func CountDocuments(ctx context.Context, c *mongo.Collection, filter interface{}, opts ...*options.CountOptions) int64 {
+	count, err := c.CountDocuments(ctx, filter, opts...)
+	if err != nil {
+		MongoPanic(err)
+	}
+	return count
+}
+
+func Exists(ctx context.Context, c *mongo.Collection, filter interface{}) (b bool) {
+	cursor, err := c.Find(ctx, filter, options.Find().SetLimit(1))
+	if err != nil {
+		MongoPanic(err)
+	}
+	return cursor.Next(ctx)
 }
 
 func Find(ctx context.Context, c *mongo.Collection, filter interface{}, results interface{}, opts ...*options.FindOptions) {
