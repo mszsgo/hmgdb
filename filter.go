@@ -14,7 +14,9 @@ func NewF() Filter {
 type Filter bson.M
 
 func (f Filter) M(k string, v Filter) Filter {
-	f[k] = v
+	if len(v) > 0 {
+		f[k] = v
+	}
 	return f
 }
 
