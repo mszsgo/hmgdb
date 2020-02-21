@@ -11,6 +11,8 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
+// 此文件方法不再使用
+
 var (
 	MONGO_ERROR = errors.New("99100:mongo->%s")
 )
